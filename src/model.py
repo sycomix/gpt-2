@@ -52,8 +52,10 @@ def conv1d(x, scope, nf, *, w_init_stdev=0.02):
         *start, nx = shape_list(x)
         w = tf.get_variable('w', [1, nx, nf], initializer=tf.random_normal_initializer(stddev=w_init_stdev))
         b = tf.get_variable('b', [nf], initializer=tf.constant_initializer(0))
-        c = tf.reshape(tf.matmul(tf.reshape(x, [-1, nx]), tf.reshape(w, [-1, nf]))+b, start+[nf])
-        return c
+        return tf.reshape(
+            tf.matmul(tf.reshape(x, [-1, nx]), tf.reshape(w, [-1, nf])) + b,
+            start + [nf],
+        )
 
 def attention_mask(nd, ns, *, dtype):
     """1's in the lower triangle, counting from the lower right corner.
@@ -116,8 +118,7 @@ def mlp(x, scope, n_state, *, hparams):
     with tf.variable_scope(scope):
         nx = x.shape[-1].value
         h = gelu(conv1d(x, 'c_fc', n_state))
-        h2 = conv1d(h, 'c_proj', nx)
-        return h2
+        return conv1d(h, 'c_proj', nx)
 
 
 def block(x, scope, *, past, hparams):
@@ -146,7 +147,6 @@ def positions_for(tokens, past_length):
 
 def model(hparams, X, past=None, scope='model', reuse=False):
     with tf.variable_scope(scope, reuse=reuse):
-        results = {}
         batch, sequence = shape_list(X)
 
         wpe = tf.get_variable('wpe', [hparams.n_ctx, hparams.n_embd],
@@ -163,7 +163,7 @@ def model(hparams, X, past=None, scope='model', reuse=False):
         for layer, past in enumerate(pasts):
             h, present = block(h, 'h%d' % layer, past=past, hparams=hparams)
             presents.append(present)
-        results['present'] = tf.stack(presents, axis=1)
+        results = {'present': tf.stack(presents, axis=1)}
         h = norm(h, 'ln_f')
 
         # Language model loss.  Do tokens <n predict token n?
